@@ -21,6 +21,7 @@ import com.example.donghua.model.VideoSource;
 import com.example.donghua.model.VideoSourceResponse;
 import com.example.donghua.network.ApiService;
 import com.example.donghua.network.RetrofitClient;
+import com.google.gson.Gson;
 
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -177,59 +178,53 @@ public class VideoPlaybackFragment extends Fragment {
 
 
     private void loadVideoSource(String slug) {
+        // Hapus trailing slash jika ada
+        if (slug.endsWith("/")) {
+            slug = slug.substring(0, slug.length() - 1);
+        }
+
+        Log.d(TAG, "Requesting slug: " + slug);
+        Log.d(TAG, "Full URL: https://anichin-api-eta.vercel.app/video-source/" + slug);
+
         apiService.getVideoSources(slug).enqueue(new Callback<VideoSourceResponse>() {
             @Override
             public void onResponse(Call<VideoSourceResponse> call, Response<VideoSourceResponse> response) {
+                Log.d(TAG, "Raw response: " + new Gson().toJson(response.body()));
+
                 if (response.isSuccessful() && response.body() != null) {
                     List<VideoSource> sources = response.body().getSources();
-                    String error = response.body().getError();
-
-                    if (error != null && !error.isEmpty()) {
-                        Log.e(TAG, "Backend returned error: " + error);
-                        Toast.makeText(getActivity(), "Error from server: " + error, Toast.LENGTH_LONG).show();
-                        getActivity().finish();
-                        return;
-                    }
 
                     if (sources != null && !sources.isEmpty()) {
                         VideoSource playableSource = null;
                         for (VideoSource source : sources) {
-                            if ("iframe_embed".equals(source.getType())) { // Hanya cari iframe_embed
+                            if ("iframe_embed".equals(source.getType())) {
                                 playableSource = source;
                                 break;
                             }
-                            // Hapus logika pencarian .mp4/.m3u8 karena hanya WebView yang digunakan
                         }
 
                         if (playableSource != null) {
                             Log.d(TAG, "Loading embed video from URL: " + playableSource.getUrl());
                             loadEmbedVideo(playableSource.getUrl());
                         } else {
-                            Log.w(TAG, "No playable embed video source found for slug: " + slug);
-                            Toast.makeText(getActivity(), "Tidak ada sumber video embed yang dapat dimainkan ditemukan.", Toast.LENGTH_LONG).show();
-                            getActivity().finish();
+                            Toast.makeText(getActivity(), "Tidak ada sumber video embed ditemukan.", Toast.LENGTH_LONG).show();
                         }
-
                     } else {
-                        Log.w(TAG, "No video sources array found or it's empty for slug: " + slug);
-                        Toast.makeText(getActivity(), "Tidak ada sumber video ditemukan untuk episode ini.", Toast.LENGTH_SHORT).show();
-                        getActivity().finish();
+                        Toast.makeText(getActivity(), "Tidak ada sumber video ditemukan.", Toast.LENGTH_SHORT).show();
                     }
                 } else {
-                    Log.e(TAG, "Failed to get video sources: " + response.code() + " - " + response.message());
-                    Toast.makeText(getActivity(), "Gagal mendapatkan sumber video dari API.", Toast.LENGTH_SHORT).show();
-                    getActivity().finish();
+                    Log.e(TAG, "Gagal mendapatkan sumber video dari API: " + response.code());
                 }
             }
 
             @Override
             public void onFailure(Call<VideoSourceResponse> call, Throwable t) {
-                Log.e(TAG, "API call for video source failed: " + t.getMessage(), t);
-                Toast.makeText(getActivity(), "Kesalahan jaringan saat mengambil sumber video.", Toast.LENGTH_SHORT).show();
-                getActivity().finish();
+                Log.e(TAG, "Network error: " + t.getMessage(), t);
+                Toast.makeText(getActivity(), "Gagal terhubung ke server.", Toast.LENGTH_SHORT).show();
             }
         });
     }
+
 
     private void loadEmbedVideo(String embedUrl) {
         // Pastikan tampilan root fragment ini disembunyikan jika kita menggunakan container terpisah
